@@ -461,8 +461,9 @@ Jamais dans le code. Dans un fichier contenant les variables d'environnement est
 > **Que faire si le modèle n'est pas entraîné ?**
 Il me semble préférable de notifier l'utilisateur de l'indisponibilité du modèle.
 
-> Faut-il mettre les prédictions en cache ?
+> **Faut-il mettre les prédictions en cache ?**
 Oui, potentiellement. Cela évite les recalculs et les temps de requêtage et d'occupation du modèle.
+
 # Étape 7 — MLOps : surveiller le modèle
 
 C'est probablement la partie qui semble la plus compliquée, mais l'idée est simple.
