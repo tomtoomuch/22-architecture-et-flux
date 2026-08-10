@@ -278,374 +278,191 @@ Il nous faut maintenant identifier la façon dont nous allons récupérer les do
 
 ### ÉTAPE 3 / Batch ou temps réel ?
 
-**batch :** Les données sont récupérées à une fréquence déterminée et ,de préférence, de manière automatique, par lots.
+#### Batch / Statique
 
+Les données sont récupérées à une fréquence déterminée et, de préférence, de manière automatique, par lots.
 
-  
-
-RTE
-
- ↓
-
-Script Python
-
- ↓
-
-Récupération données
-
- ↓
-
-Base de données
-
-Exemple parfait :
-
-historique de consommation
-
-Tu n'as pas besoin de récupérer toute l'année de consommation à chaque prédiction.
-
+```mermaid
 ---
-
-## Streaming / temps réel
-
-La donnée est récupérée au moment où elle est nécessaire.
-
-Exemple :
-
-Utilisateur demande une prédiction
-
-          ↓
-
-Gateway
-
-          ↓
-
-Python
-
-          ↓
-
-API météo
-
-          ↓
-
-Température actuelle
-
-          ↓
-
-Modèle ML
-
-          ↓
-
-Prédiction
-
-La météo actuelle peut être récupérée en temps réel.
-
+config:
+  layout: elk
 ---
+flowchart TD
+	A[Source statique]
+	B[ETL Python]
+	C[Stockage en bases]
+	
+	A --> B
+	B --> C
+	
+	classDef dataSource stroke:#818cf8,fill:#eef2ff
+	classDef process stroke:#2dd4bf,fill:#f0fdfa
+	classDef output stroke:#fb923c,fill:#fff7ed
 
-## Exemple de architecture
+	class A dataSource
+    class B process
+    class C output
+```
 
-Vous pourriez avoir :
+#### Streaming / temps réel
 
-                   ┌──────────────┐
+Les données sont récupérées au moment où elles sont nécessaire.
 
-                    │     RTE      │
-
-                    │ consommation │
-
-                    └──────┬───────┘
-
-                           │
-
-                         BATCH
-
-                           │
-
-                           ↓
-
-                    ┌──────────────┐
-
-                    │    Base DB   │
-
-                    └──────┬───────┘
-
-                           │
-
-                           │
-
-┌──────────────┐           │
-
-│ API météo    │───temps réel───┐
-
-└──────────────┘                │
-
-                                ↓
-
-                        ┌──────────────┐
-
-                        │ Service ML   │
-
-                        │   Python     │
-
-                        └──────┬───────┘
-
-                               │
-
-                               ↓
-
-                           Prediction
-
+```mermaid
 ---
+config:
+  layout: elk
+---
+flowchart TD
+	A[Utilisateur demande une prédiction]
+	B[Passerelle / Gateway]
+	C[MS Python]
+	D[API Météo]
+	E[Température actuelle]
+	F[Modèle ML]
+	G[Prédiction]
+		
+	A --> B
+	B --> C
+	C --> D
+	D --> E
+	E --> F
+	F --> G
+	
+	classDef dataSource stroke:#818cf8,fill:#eef2ff
+	classDef process stroke:#2dd4bf,fill:#f0fdfa
+	classDef output stroke:#fb923c,fill:#fff7ed
 
-# Étape 4 — Dessiner le flux de données
+	class A,C,D,E dataSource
+    class B,D,F process
+    class G output
+```
 
-Ici, vous devez faire un schéma d'architecture.
+### ÉTAPE 5 / Dessiner le flux de données
 
-Le brief vous pose plusieurs questions.
-
-### Question 1
+Le besoin pose plusieurs questions fondamentales :
+#### Question 1
 
 Le module de prédiction est-il un nouveau microservice ?
 
-Je vous conseillerais :
-
-Gateway Express
-
-      ↓
-
-Prediction Service
-
-      ↓
-
-Model ML
-
-Donc un microservice Python séparé.
-
-Par exemple :
-
-gateway/
-
-    ↓
-
-prediction-service/
-
-Pourquoi ?
-
-Parce que le modèle ML est indépendant du Gateway.
-
----
-
-### Question 2
+Au moins par respect de la 'séparation des responsabilités' et pour des raisons de maintenabilité
+#### Question 2
 
 Comment transmettre la prédiction ?
 
 Par exemple :
-
+```json
 {
-
-    "prediction_mw": 4520,
+	"prediction_mw": 4520,
 
     "model_version": "v1.2",
 
-    "timestamp": "2026-08-09T13:00:00"
-
+    "timestamp": "2026-08-09T13:00:00
 }
-
+```
 Le service Python retourne cette réponse au Gateway.
-
----
-
-### Question 3
+#### Question 3
 
 Que faire si l'API météo est indisponible ?
 
 Il faut prévoir un fallback.
 
-Par exemple :
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+	A[API météo indisponible]
+	B[Utiliser dernière température connue]
+	C[Prédiction]
 
-API météo disponible
+	A --> B
+	B --> C
 
-       ↓
+	classDef dataSource stroke:#818cf8,fill:#eef2ff
+	classDef process stroke:#2dd4bf,fill:#f0fdfa
+	classDef output stroke:#fb923c,fill:#fff7ed
 
-température réelle
-
-       ↓
-
-prédiction
-
-Mais :
-
-API météo indisponible
-
-       ↓
-
-utiliser dernière température connue
-
-       ↓
-
-prédiction
+	class A dataSource
+    class B process
+    class C output
+```
 
 Ou retourner une erreur claire :
-
+```json
 {
-
     "error": "Weather service unavailable"
-
 }
+```
+La première solution semble préférable.
+### ÉTAPE 5 / Concevoir la base de données
 
-Il faut simplement choisir une stratégie et la justifier.
-
----
-
-# Étape 5 — Concevoir la base de données
-
-C'est une partie très importante.
-
-Aujourd'hui :
-
-JSON statique
-
-Vous devez proposer quelque chose comme :
+La modélisation de la donnée et de ses relations sont fondamentales à tout trraitement. Dans le cadre de notre projet, cet étape attend une structuration importante de la donnée, de son choix à son implémentation.
 
 Database
-
 │
-
 ├── consumption
-
 ├── weather
-
 ├── calendar
-
 ├── prediction
-
 └── model
+#### consumption
 
-Par exemple :
+| colonne        | exemple          |
+| -------------- | ---------------- |
+| id             | 1                |
+| timestamp      | 2026-08-09 13:00 |
+| region         | Occitanie        |
+| consumption_mw | 4520             |
 
-### consumption
+#### weather
 
-|   |   |
-|---|---|
-|colonne|exemple|
-|id|1|
-|timestamp|2026-08-09 13:00|
-|region|Occitanie|
-|consumption_mw|4520|
+| colonne     | exemple          |
+| ----------- | ---------------- |
+| id          | 1                |
+| timestamp   | 2026-08-09 13:00 |
+| temperature | 28.5             |
+| humidity    | 55               |
+| sunshine    | 80               |
 
-### weather
+#### prediction
 
-|   |   |
-|---|---|
-|colonne|exemple|
-|id|1|
-|timestamp|2026-08-09 13:00|
-|temperature|28.5|
-|humidity|55|
-|sunshine|80|
+|               |                  |
+| ------------- | ---------------- |
+| colonne       | exemple          |
+| id            | 1                |
+| timestamp     | 2026-08-09 13:00 |
+| predicted_mw  | 4600             |
+| model_version | v1.2             |
+| actual_mw     | 4520             |
+| mae           | ...              |
 
-### prediction
+#### model
 
-|   |   |
-|---|---|
-|colonne|exemple|
-|id|1|
-|timestamp|2026-08-09 13:00|
-|predicted_mw|4600|
-|model_version|v1.2|
-|actual_mw|4520|
-|mae|...|
+|            |                       |
+| ---------- | --------------------- |
+| colonne    | exemple               |
+| id         | 1                     |
+| version    | v1.2                  |
+| trained_at | 2026-08-01            |
+| model_path | models/model_v1.2.pkl |
 
-### model
+### ÉTAPE 6 / Prévoir les problèmes en production
 
-|   |   |
-|---|---|
-|colonne|exemple|
-|id|1|
-|version|v1.2|
-|trained_at|2026-08-01|
-|model_path|models/model_v1.2.pkl|
+Envisageons maintenant le projet sous l'angle de la maintenance et de la surveillance du ML : les MLOps.
+Il est se poser une question simple : que se passe-t-il quand le modèle est réellement utilisé ?
 
----
+En répondant  à cette question, il semble évident d'aborder l'ensemble des problèmes que l'on peut rencontrer.
 
-# Étape 6 — Prévoir les problèmes en production
+> **Où mettre les clés API ?**
+Jamais dans le code. Dans un fichier contenant les variables d'environnement est la bonne pratique.
 
-Ici, le brief devient MLOps.
+> **Que faire si le modèle n'est pas entraîné ?**
+Il me semble préférable de notifier l'utilisateur de l'indisponibilité du modèle.
 
-Il vous demande :
-
-Que se passe-t-il quand le modèle est réellement utilisé ?
-
-Vous devez répondre à plusieurs problèmes.
-
----
-
-##  1. Où mettre les clés API ?
-
-Jamais dans le code.
-
-❌ Mauvais :
-
-API_KEY = "123456789"
-
-✅ Correct :
-
-.env
-
-Puis :
-
-os.getenv("WEATHER_API_KEY")
-
-Et .env doit être dans .gitignore.
-
----
-
-##  2. Que faire si le modèle n'est pas entraîné ?
-
-Vous devez choisir.
-
-Par exemple :
-
-Prediction request
-
-       ↓
-
-Model disponible ?
-
-    ↙       ↘
-
-  OUI       NON
-
-   ↓         ↓
-
-prediction  erreur 503
-
-Je trouve cette solution préférable à inventer une prédiction.
-
----
-
-##  3. Faut-il mettre les prédictions en cache ?
-
-Oui, potentiellement.
-
-Exemple :
-
-Même demande
-
-    ↓
-
-Prediction déjà calculée ?
-
-    ↓
-
-   OUI
-
-    ↓
-
-retourner résultat
-
-Cela évite de recalculer inutilement.
-
----
-
+> Faut-il mettre les prédictions en cache ?
+Oui, potentiellement. Cela évite les recalculs et les temps de requêtage et d'occupation du modèle.
 # Étape 7 — MLOps : surveiller le modèle
 
 C'est probablement la partie qui semble la plus compliquée, mais l'idée est simple.
@@ -851,36 +668,29 @@ Ton brief demande essentiellement 6 livrables.
 
 ### 1️⃣ Catalogue des dimensions
 
-Un tableau :
-
-Dimension | Variable | Pourquoi | Priorité
-
-avec 4 à 6 dimensions.
-
-|   |   |   |   |
-|---|---|---|---|
-|DIMENSION||   |   |
-|dim_temps|VARIABLE|POURQUOI|PRIORITE|
-|Gère le jour, sa date, la saisonnalité, jours chômés|   |   |   |
-||id_temps|Pour créer une correspondance avec la table de faits||
-||date|Date au format  <br>YY-m-d -||
-||annee|YY - Tendance longue durée||
-||mois|m - Saisonnalité||
-||jour|Jour de la semaine  <br>Identification de motifs liés au WE||
-||date_complète|Date au format  <br>Lundi 10 août 2026||
-||est_weekend|Bool - détection de motifs||
-||est_vacances|Bool - détection de motifs||
-|dim_journee|   |   |   |
-|Gère la temporalité horaire des relevés (et évènements ?)|   |   |   |
-||id_journee|Date? (dim_temps)||
-||time|h - temporalité des relevés de conso||
-||heure_creuse|tarif - temporalité du coût de la consommation||
-|dim_vacances|   |   |   |
-|Gère les périodes de vacances scolaires - dim_region sollicitée  <br>[https://www.service-public.gouv.fr/particuliers/actualites/A18563](https://www.service-public.gouv.fr/particuliers/actualites/A18563)|   |   |   |
-||id_vacance|int unique nn|PK|
-||id_zone|char(1) unique nn|FK de dim_region|
-||debut_periode|||
-||fin_periode|||
+| DIMENSION                                                                                                                                                                                                   |               |                                                             |                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------- | ---------------- |
+| **dim_temps**                                                                                                                                                                                               | VARIABLE      | POURQUOI                                                    | PRIORITE         |
+| Gère le jour, sa date, la saisonnalité, jours chômés                                                                                                                                                        |               |                                                             |                  |
+|                                                                                                                                                                                                             | id_temps      | Pour créer une correspondance avec la table de faits        |                  |
+|                                                                                                                                                                                                             | date          | Date au format  <br>YY-m-d -                                |                  |
+|                                                                                                                                                                                                             | annee         | YY - Tendance longue durée                                  |                  |
+|                                                                                                                                                                                                             | mois          | m - Saisonnalité                                            |                  |
+|                                                                                                                                                                                                             | jour          | Jour de la semaine  <br>Identification de motifs liés au WE |                  |
+|                                                                                                                                                                                                             | date_complète | Date au format  <br>Lundi 10 août 2026                      |                  |
+|                                                                                                                                                                                                             | est_weekend   | Bool - détection de motifs                                  |                  |
+|                                                                                                                                                                                                             | est_vacances  | Bool - détection de motifs                                  |                  |
+| dim_journee                                                                                                                                                                                                 |               |                                                             |                  |
+| Gère la temporalité horaire des relevés (et évènements ?)                                                                                                                                                   |               |                                                             |                  |
+|                                                                                                                                                                                                             | id_journee    | Date? (dim_temps)                                           |                  |
+|                                                                                                                                                                                                             | time          | h - temporalité des relevés de conso                        |                  |
+|                                                                                                                                                                                                             | heure_creuse  | tarif - temporalité du coût de la consommation              |                  |
+| dim_vacances                                                                                                                                                                                                |               |                                                             |                  |
+| Gère les périodes de vacances scolaires - dim_region sollicitée  <br>[https://www.service-public.gouv.fr/particuliers/actualites/A18563](https://www.service-public.gouv.fr/particuliers/actualites/A18563) |               |                                                             |                  |
+|                                                                                                                                                                                                             | id_vacance    | int unique nn                                               | PK               |
+|                                                                                                                                                                                                             | id_zone       | char(1) unique nn                                           | FK de dim_region |
+|                                                                                                                                                                                                             | debut_periode |                                                             |                  |
+|                                                                                                                                                                                                             | fin_periode   |                                                             |                  |
 
   
   
